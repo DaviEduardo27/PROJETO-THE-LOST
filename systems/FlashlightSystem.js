@@ -8,12 +8,23 @@ export default class FlashlightSystem {
         this.isOn = true;
         this.drainRate = 5;
 
-        this.graphics = scene.add.graphics();
-        this.graphics.setScrollFactor(0);
-        this.graphics.setDepth(999);
+        // Camada de escuridão
+        this.darkOverlay = scene.add.rectangle(
+            0, 0, 2000, 2000, 0x000000, 0.8
+        ).setOrigin(0);
+
+        // Graphics que será a máscara
+        this.maskGraphics = scene.make.graphics({});
+        this.lightMask = this.maskGraphics.createGeometryMask();
+        this.lightMask.setInvertAlpha(true);
+
+        this.darkOverlay.setMask(this.lightMask);
+
+        // Graphics visual para a cor da luz
+        this.lightGraphics = scene.add.graphics();
     }
 
-    update(delta) {
+    update(delta, cursors) {
 
         if (this.isOn && this.battery > 0) {
             this.battery -= this.drainRate * (delta / 1000);
@@ -24,7 +35,7 @@ export default class FlashlightSystem {
             }
         }
 
-        this.renderLight();
+        this.renderCone(cursors);
     }
 
     toggle() {
@@ -33,28 +44,58 @@ export default class FlashlightSystem {
         }
     }
 
-    renderLight() {
+    renderCone(cursors) {
 
-        this.graphics.clear();
+        this.maskGraphics.clear();
+        this.lightGraphics.clear();
 
-        // Desenha escuridão
-        this.graphics.fillStyle(0x000000, 0.95);
-        this.graphics.fillRect(0, 0, 1280, 720);
+        if (!this.isOn || this.battery <= 0) return;
 
-        if (!this.isOn) return;
+        const angle = this.getDirectionAngle(cursors);
+        const coneLength = 400;
+        const coneWidth = Math.PI / 6;
 
-        // Ativa modo de recorte
-        this.graphics.setBlendMode(Phaser.BlendModes.ERASE);
+        this.maskGraphics.fillStyle(0xffffff);
 
-        // Desenha círculo de luz (usando posição da câmera)
-        const cam = this.scene.cameras.main;
+        this.maskGraphics.beginPath();
+        this.maskGraphics.moveTo(this.player.x, this.player.y);
 
-        const x = this.player.x - cam.scrollX;
-        const y = this.player.y - cam.scrollY;
+        this.maskGraphics.arc(
+            this.player.x,
+            this.player.y,
+            coneLength,
+            angle - coneWidth,
+            angle + coneWidth
+        );
 
-        this.graphics.fillCircle(x, y, 200);
+        this.maskGraphics.closePath();
+        this.maskGraphics.fillPath();
 
-        // Volta para modo normal
-        this.graphics.setBlendMode(Phaser.BlendModes.NORMAL);
+        // Desenha a cor amarelada da luz
+        this.lightGraphics.fillStyle(0xffdd00, 0.3);
+
+        this.lightGraphics.beginPath();
+        this.lightGraphics.moveTo(this.player.x, this.player.y);
+
+        this.lightGraphics.arc(
+            this.player.x,
+            this.player.y,
+            coneLength,
+            angle - coneWidth,
+            angle + coneWidth
+        );
+
+        this.lightGraphics.closePath();
+        this.lightGraphics.fillPath();
+    }
+
+    getDirectionAngle(cursors) {
+
+        if (cursors.left.isDown) return Math.PI;
+        if (cursors.right.isDown) return 0;
+        if (cursors.up.isDown) return -Math.PI / 2;
+        if (cursors.down.isDown) return Math.PI / 2;
+
+        return 0; // padrão olhando para direita
     }
 }

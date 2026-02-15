@@ -12,7 +12,7 @@ export default class SanitySystem {
         this.recoveryRate = 1;   // quando seguro
 
         this.overlay = scene.add.rectangle(
-            0, 0, 1280, 720, 0xff0000, 0
+            0, 0, scene.scale.width, scene.scale.height, 0xff0000, 0
         ).setOrigin(0).setScrollFactor(0);
     }
 
