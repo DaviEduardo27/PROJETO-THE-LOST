@@ -1,13 +1,19 @@
+import IsoUtils from '../utils/IsoUtils.js';
+
 export default class DoorSystem {
 
     constructor(scene, x, y) {
     this.scene = scene;
 
-    this.state = 'closed'; // fechado | aberto | trancado
-
-    this.sprite = scene.add.rectangle(x, y, 60, 100, 0x654321);
+    // Body Físico (Invisível)
+    this.body = scene.add.rectangle(x, y, 60, 100, 0x000000, 0);
     // Cria corpo estático (true) para colisão sólida
-    scene.physics.add.existing(this.sprite, true);
+    scene.physics.add.existing(this.body, true);
+
+    // Sprite Visual
+    const iso = IsoUtils.cartToIso(x, y);
+    this.sprite = scene.add.rectangle(iso.x, iso.y, 60, 100, 0x654321);
+    this.sprite.setDepth(iso.y);
 
     this.interactionDistance = 80;
     
@@ -20,14 +26,24 @@ export default class DoorSystem {
 // Comportamento aleatório da porta baseado na sanidade do jogador
     update(player) {
 
+    // Atualiza posição da sprite para seguir o body (considerando isometria)
+    const iso = IsoUtils.cartToIso(this.body.x, this.body.y);
+
+    this.sprite.x = iso.x;
+    this.sprite.y = iso.y;
+    this.sprite.setDepth(
+        IsoUtils.getIsoDepth(this.body.x, this.body.y)
+    );
+
+
     // Se o jogador estiver lendo algo, não mostra o texto da porta
     if (this.scene.interactionSystem && this.scene.interactionSystem.isReading) return;
 
     const dist = Phaser.Math.Distance.Between(
         player.x,
         player.y,
-        this.sprite.x,
-        this.sprite.y
+        this.body.x,
+        this.body.y
     );
 
     if (dist < this.interactionDistance) {
@@ -98,21 +114,54 @@ export default class DoorSystem {
     }
 }
 
+// Verifica se a porta deve causar uma transição de mundo com base na sanidade do jogador
+handleWorldTransition() { 
+
+    const sanity = this.scene.sanitySystem.currentSanity;
+
+    if (sanity < 50) {
+
+        // pequena pausa dramática
+        this.scene.time.delayedCall(300, () => {
+
+            this.scene.cameras.main.fadeOut(200);
+
+            this.scene.time.delayedCall(200, () => {
+
+                this.scene.worldTopology.switchWorld();
+
+                this.scene.cameras.main.fadeIn(200);
+
+            });
+
+        });
+    }
+    
+    const iso = IsoUtils.cartToIso(this.body.x, this.body.y);
+
+    this.sprite.x = iso.x;
+    this.sprite.y = iso.y;
+
+    this.sprite.depth = this.sprite.y;
+}
+
 
     open() {
     this.state = 'open';
 
     this.sprite.setFillStyle(0xaaaaaa);
-    this.sprite.body.enable = false; // remove colisão
+    this.body.body.enable = false; // remove colisão do body
 
-    this.scene.sound.play('door');
+    this.scene.sound.play('door'); // Som de porta abrindo
+
+    this.handleWorldTransition(); // Verifica se deve mudar o mundo
     }
 
     close() {
     this.state = 'closed';
 
     this.sprite.setFillStyle(0x654321);
-    this.sprite.body.enable = true; // ativa colisão
+    this.body.body.enable = true; // ativa colisão do body
 
     this.scene.sound.play('door');
     }
@@ -122,7 +171,7 @@ export default class DoorSystem {
     this.state = 'closed';
 
     this.sprite.setFillStyle(0x654321);
-    this.sprite.body.enable = true;
+    this.body.body.enable = true;
 
     this.scene.cameras.main.shake(300, 0.02);
     this.scene.sound.play('door');

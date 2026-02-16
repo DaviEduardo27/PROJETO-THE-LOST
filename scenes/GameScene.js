@@ -5,6 +5,8 @@ import InteractionSystem from '../systems/InteractionSystem.js';
 import DoorSystem from '../systems/DoorSystem.js';
 import InventorySystem from '../systems/InventorySystem.js';
 import KeyItem from '../systems/KeyItem.js';
+import WorldTopologySystem from '../systems/WorldTopologySystem.js';
+import IsoUtils from '../utils/IsoUtils.js';
 
 
 export default class GameScene extends Phaser.Scene {
@@ -33,9 +35,14 @@ export default class GameScene extends Phaser.Scene {
     this.physics.world.setBounds(0, 0, 2000, 2000);
     this.cameras.main.setBounds(0, 0, 2000, 2000);
 
-    // Player
-    this.player = this.physics.add.sprite(1000, 1000, 'player');
-    this.player.setCollideWorldBounds(true);
+    // Player - REFATORADO: Separação de Body e Sprite
+    // Body: Invisível, usado para física e lógica
+    this.player = this.add.rectangle(1000, 1000, 32, 32, 0x000000, 0);
+    this.physics.add.existing(this.player);
+    this.player.body.setCollideWorldBounds(true);
+
+    // Sprite: Visual, apenas segue o body
+    this.playerSprite = this.add.sprite(1000, 1000, 'player');
 
     // 1. Sistema de lanterna (Base)
     this.flashlight = new FlashlightSystem(this, this.player);
@@ -61,12 +68,26 @@ export default class GameScene extends Phaser.Scene {
         this.eventSystem
     );
 
-    const note = this.add.rectangle(1200, 1000, 40, 40, 0xffffff);
-    this.physics.add.existing(note);
+    // Nota - REFATORADO
+    const noteBody = this.add.rectangle(1200, 1000, 40, 40, 0x000000, 0);
+    this.physics.add.existing(noteBody);
+    const noteIso = IsoUtils.cartToIso(noteBody.x, noteBody.y);
+
+    const noteSprite = this.add.rectangle(
+        noteIso.x,
+        noteIso.y,
+        40,
+        40,
+        0xffffff
+    );
+
+    noteSprite.setDepth(noteSprite.y);
+
 
     this.interactionSystem.addObject({
         id: 'note1',
-        sprite: note,
+        body: noteBody,
+        sprite: noteSprite,
         description: 'Uma nota rasgada... "Ele nunca saiu daqui."',
         onInteract: () => {
             console.log("Pista coletada!");
@@ -75,7 +96,7 @@ export default class GameScene extends Phaser.Scene {
     });
     this.door = new DoorSystem(this, 1400, 1000);
 
-    this.physics.add.collider(this.player, this.door.sprite);
+    this.physics.add.collider(this.player, this.door.body);
 
     // Configuração WASD mantendo a estrutura de 'cursors' para compatibilidade
     this.cursors = this.input.keyboard.addKeys({
@@ -86,7 +107,7 @@ export default class GameScene extends Phaser.Scene {
     });
 
     // 🎥 CÂMERA CINEMATOGRÁFICA
-    this.cameras.main.startFollow(this.player, true, 0.05, 0.05);
+    this.cameras.main.startFollow(this.playerSprite, true, 0.05, 0.05);
 
     // Deadzone central
     this.cameras.main.setDeadzone(200, 150);
@@ -120,8 +141,13 @@ export default class GameScene extends Phaser.Scene {
     // Chave para o porão
     this.key = new KeyItem(this, 1200, 1000, 'basement_key');
 
+    // Sistema de topologia do mundo
+    this.worldTopology = new WorldTopologySystem(this);
 
+    this.worldTopology.generateWorld();
+    this.worldTopology.generateAlternativeWorld();
 }
+
     // Alterna o estado do mundo para eventos aleatórios
     changeWorld() {
 
@@ -134,6 +160,7 @@ export default class GameScene extends Phaser.Scene {
     }
 }
 
+
 // Aplica efeitos de mundo distorcido
     applyDistortedWorld() {
 
@@ -141,10 +168,17 @@ export default class GameScene extends Phaser.Scene {
 
     this.cameras.main.shake(500, 0.02);
 
-    this.walls.forEach(wall => {
-        wall.x += Phaser.Math.Between(-50, 50);
-        wall.y += Phaser.Math.Between(-50, 50);
-    });
+    if (this.generatedWalls) {
+        this.generatedWalls.forEach(wall => {
+            wall.body.x += Phaser.Math.Between(-50, 50);
+            wall.body.y += Phaser.Math.Between(-50, 50);
+            
+            const iso = IsoUtils.cartToIso(wall.body.x, wall.body.y);
+            wall.sprite.x = iso.x;
+            wall.sprite.y = iso.y;
+            wall.sprite.setDepth(iso.y);
+        });
+    }
 
 }
 
@@ -163,20 +197,30 @@ export default class GameScene extends Phaser.Scene {
             this.batteryText.setColor('#ffffff');
         }
 
-        this.player.setVelocity(0);
+        this.player.body.setVelocity(0);
 
         if (this.cursors.left.isDown) {
-            this.player.setVelocityX(-speed);
+            this.player.body.setVelocityX(-speed);
         }
         if (this.cursors.right.isDown) {
-            this.player.setVelocityX(speed);
+            this.player.body.setVelocityX(speed);
         }
         if (this.cursors.up.isDown) {
-            this.player.setVelocityY(-speed);
+            this.player.body.setVelocityY(-speed);
         }
         if (this.cursors.down.isDown) {
-            this.player.setVelocityY(speed);
+            this.player.body.setVelocityY(speed);
         }
+
+        // Atualiza posição da sprite do player para seguir o body
+        const isoPos = IsoUtils.cartToIso(this.player.x, this.player.y);
+
+        this.playerSprite.x = isoPos.x;
+        this.playerSprite.y = isoPos.y;
+
+        // Depth global isométrico
+        this.playerSprite.setDepth(IsoUtils.getIsoDepth(this.player.x, this.player.y));
+
 
         if (Phaser.Input.Keyboard.JustDown(this.keyF)) {
             this.flashlight.toggle();
@@ -200,6 +244,15 @@ export default class GameScene extends Phaser.Scene {
 
         this.interactionSystem.update(this.player);
         this.door.update(this.player);
+
+        if (this.key) this.key.update();
+
+        this.generatedWalls?.forEach(wall => {
+            const iso = IsoUtils.cartToIso(wall.body.x, wall.body.y);
+            wall.sprite.x = iso.x;
+            wall.sprite.y = iso.y;
+            wall.sprite.depth = wall.sprite.y;
+        });
 
         if (Phaser.Input.Keyboard.JustDown(this.keyE)) {
             this.interactionSystem.tryInteract();

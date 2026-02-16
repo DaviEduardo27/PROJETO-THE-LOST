@@ -25,6 +25,7 @@ export default class InteractionSystem {
 
         const obj = {
             id: config.id,
+            body: config.body,
             sprite: config.sprite,
             description: config.description,
             onInteract: config.onInteract,
@@ -55,8 +56,8 @@ export default class InteractionSystem {
             const dist = Phaser.Math.Distance.Between(
                 player.x,
                 player.y,
-                obj.sprite.x,
-                obj.sprite.y
+                obj.body.x,
+                obj.body.y
             );
 
             if (dist < minDist && !obj.isCollected) {
