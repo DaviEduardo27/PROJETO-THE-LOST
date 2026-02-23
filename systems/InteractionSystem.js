@@ -2,112 +2,67 @@ export default class InteractionSystem {
 
     constructor(scene) {
         this.scene = scene;
-        this.objects = [];
-        this.isReading = false;
-
-        this.interactionDistance = 80;
-
+        
+        // Texto de UI para interação
         this.infoText = scene.add.text(
-            640, 650,
+            scene.scale.width / 2, 
+            scene.scale.height - 100,
             '',
             {
-                fontSize: '18px',
+                fontSize: '24px',
                 fill: '#ffffff',
-                wordWrap: { width: 1000 }
+                backgroundColor: '#000000aa',
+                padding: { x: 10, y: 5 }
             }
         )
         .setOrigin(0.5)
         .setScrollFactor(0)
-        .setDepth(100);
+        .setDepth(1000);
     }
 
-    addObject(config) {
-
-        const obj = {
-            id: config.id,
-            body: config.body,
-            sprite: config.sprite,
-            description: config.description,
-            onInteract: config.onInteract,
-            isCollected: false
-        };
-
-        this.objects.push(obj);
-    }
-
-    update(player) {
-
-        if (this.isReading) {
-            // Tremor leve para aumentar a tensão
-            const shake = 1;
-            this.infoText.setPosition(
-                640 + Phaser.Math.Between(-shake, shake),
-                650 + Phaser.Math.Between(-shake, shake)
-            );
-            return;
-        }
-        this.infoText.setPosition(640, 650);
-
+    update(player, interactables) {
         let closest = null;
-        let minDist = this.interactionDistance;
+        let minDist = 100; // Raio de interação
 
-        this.objects.forEach(obj => {
+        // Encontra o interagível mais próximo
+        interactables.forEach(obj => {
+            // Verifica se objeto é válido (não destruído)
+            if (!obj || (obj.sprite && !obj.sprite.scene) || (obj.body && !obj.body.scene)) return;
+
+            // Pega posição (trata estruturas diferentes de objetos)
+            const targetX = obj.body ? obj.body.x : obj.x;
+            const targetY = obj.body ? obj.body.y : obj.y;
 
             const dist = Phaser.Math.Distance.Between(
-                player.x,
-                player.y,
-                obj.body.x,
-                obj.body.y
+                player.x, 
+                player.y, 
+                targetX, 
+                targetY
             );
 
-            if (dist < minDist && !obj.isCollected) {
-                closest = obj;
+            if (dist < minDist) {
                 minDist = dist;
+                closest = obj;
             }
         });
 
         if (closest) {
-            this.infoText.setText('Pressione E para interagir');
-            this.currentObject = closest;
+            this.infoText.setText('Pressione E');
+            this.infoText.setVisible(true);
+            this.currentFocus = closest;
         } else {
-            this.infoText.setText('');
-            this.currentObject = null;
+            this.infoText.setVisible(false);
+            this.currentFocus = null;
         }
     }
 
     tryInteract() {
-
-        if (!this.currentObject) return;
-
-        this.isReading = true;
-        this.infoText.setText('');
-
-        const fullText = this.currentObject.description;
-        let currentChar = 0;
-
-        // Efeito Typewriter: Adiciona uma letra a cada 50ms
-        this.scene.time.addEvent({
-            delay: 50,
-            callback: () => {
-                this.infoText.text += fullText[currentChar];
-                currentChar++;
-            },
-            repeat: fullText.length - 1
-        });
-
-        if (this.currentObject.onInteract) {
-            this.currentObject.onInteract();
+        if (this.currentFocus && typeof this.currentFocus.onInteract === 'function') {
+            this.currentFocus.onInteract();
+            
+            // Limpa foco imediatamente para evitar interação dupla em objetos destruídos
+            this.currentFocus = null; 
+            this.infoText.setVisible(false);
         }
-
-        this.currentObject.isCollected = true;
-
-        // Calcula o tempo total: tempo para digitar + 2 segundos de leitura extra
-        const typingDuration = fullText.length * 50;
-        const extraReadTime = 2000;
-
-        this.scene.time.delayedCall(typingDuration + extraReadTime, () => {
-            this.infoText.setText('');
-            this.isReading = false;
-        });
     }
 }

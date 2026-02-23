@@ -3,182 +3,61 @@ import IsoUtils from '../utils/IsoUtils.js';
 export default class DoorSystem {
 
     constructor(scene, x, y) {
-    this.scene = scene;
+        this.scene = scene;
+        this.isOpen = false;
+        this.x = x;
+        this.y = y;
 
-    // Body Físico (Invisível)
-    this.body = scene.add.rectangle(x, y, 60, 100, 0x000000, 0);
-    // Cria corpo estático (true) para colisão sólida
-    scene.physics.add.existing(this.body, true);
+        // Sprite Visual
+        this.sprite = scene.add.rectangle(x, y, 20, 100, 0x8B4513);
+        
+        // Body Físico
+        this.body = scene.add.rectangle(x, y, 20, 100, 0x000000, 0);
+        scene.physics.add.existing(this.body, true); // Corpo estático
 
-    // Sprite Visual
-    const iso = IsoUtils.cartToIso(x, y);
-    this.sprite = scene.add.rectangle(iso.x, iso.y, 60, 100, 0x654321);
-    this.sprite.setDepth(iso.y);
-
-    this.interactionDistance = 80;
-    
-    // Chave necessária para abrir a porta
-    this.requiredKey = 'basement_key';
-    this.state = 'locked';
-
+        this.updateVisuals();
     }
 
-// Comportamento aleatório da porta baseado na sanidade do jogador
-    update(player) {
-
-    // Atualiza posição da sprite para seguir o body (considerando isometria)
-    const iso = IsoUtils.cartToIso(this.body.x, this.body.y);
-
-    this.sprite.x = iso.x;
-    this.sprite.y = iso.y;
-    this.sprite.setDepth(
-        IsoUtils.getIsoDepth(this.body.x, this.body.y)
-    );
-
-
-    // Se o jogador estiver lendo algo, não mostra o texto da porta
-    if (this.scene.interactionSystem && this.scene.interactionSystem.isReading) return;
-
-    const dist = Phaser.Math.Distance.Between(
-        player.x,
-        player.y,
-        this.body.x,
-        this.body.y
-    );
-
-    if (dist < this.interactionDistance) {
-        this.scene.interactionSystem.infoText.setText('Pressione E para interagir com a porta');
-        this.canInteract = true;
-    } else {
-        this.canInteract = false;
+    // Interface requerida pelo InteractionSystem
+    onInteract() {
+        this.toggle();
     }
 
-    this.handleInsanityBehavior();
-    }
-
-    // Comportamento da porta baseado na sanidade do jogador
-    handleInsanityBehavior() {
-
-    const sanity = this.scene.sanitySystem.currentSanity;
-
-    if (this.state === 'open') {
-
-        if (sanity < 70 && sanity >= 40) {
-            this.randomClose(0.001);
-        }
-
-        if (sanity < 40 && sanity >= 10) {
-            this.randomClose(0.003);
-        }
-
-        if (sanity < 10) {
-            this.randomSlam(0.005);
-        }
-        }
-    }
-
-    // Fecha a porta aleatoriamente com base na probabilidade
-    randomClose(chance) {
-        if (Math.random() < chance) {
-        this.close();
-     }
-    }
-
-    randomSlam(chance) {
-        if (Math.random() < chance) {
-        this.slam();
-        }
-    }
-
-
-    // Fecha a porta aleatoriamente com base na probabilidade
-    interact() {
-
-    if (!this.canInteract) return;
-
-    if (this.state === 'locked') {
-
-        if (this.scene.inventorySystem.hasItem(this.requiredKey)) {
-            console.log("🔓 Porta destrancada!");
-            this.state = 'closed';
+    toggle() {
+        this.isOpen = !this.isOpen;
+        
+        if (this.isOpen) {
+            this.open();
         } else {
-            console.log("🚫 Está trancada.");
-            return;
+            this.close();
         }
     }
-
-    if (this.state === 'closed') {
-        this.open();
-    } else if (this.state === 'open') {
-        this.close();
-    }
-}
-
-// Verifica se a porta deve causar uma transição de mundo com base na sanidade do jogador
-handleWorldTransition() { 
-
-    const sanity = this.scene.sanitySystem.currentSanity;
-
-    if (sanity < 50) {
-
-        // pequena pausa dramática
-        this.scene.time.delayedCall(300, () => {
-
-            this.scene.cameras.main.fadeOut(200);
-
-            this.scene.time.delayedCall(200, () => {
-
-                this.scene.worldTopology.switchWorld();
-
-                this.scene.cameras.main.fadeIn(200);
-
-            });
-
-        });
-    }
-    
-    const iso = IsoUtils.cartToIso(this.body.x, this.body.y);
-
-    this.sprite.x = iso.x;
-    this.sprite.y = iso.y;
-
-    this.sprite.depth = this.sprite.y;
-}
-
 
     open() {
-    this.state = 'open';
-
-    this.sprite.setFillStyle(0xaaaaaa);
-    this.body.body.enable = false; // remove colisão do body
-
-    this.scene.sound.play('door'); // Som de porta abrindo
-
-    this.handleWorldTransition(); // Verifica se deve mudar o mundo
+        this.isOpen = true;
+        this.scene.sound.play('doorOpen');
+        this.body.body.enable = false; // Desabilita colisão
+        this.updateVisuals();
     }
 
     close() {
-    this.state = 'closed';
-
-    this.sprite.setFillStyle(0x654321);
-    this.body.body.enable = true; // ativa colisão do body
-
-    this.scene.sound.play('door');
+        this.isOpen = false;
+        this.scene.sound.play('door');
+        this.body.body.enable = true; // Habilita colisão
+        this.updateVisuals();
     }
 
-    // Tranca a porta
-    slam() {
-    this.state = 'closed';
-
-    this.sprite.setFillStyle(0x654321);
-    this.body.body.enable = true;
-
-    this.scene.cameras.main.shake(300, 0.02);
-    this.scene.sound.play('door');
-
-    if (this.scene.sanitySystem.currentSanity < 30) {
-        this.scene.changeWorld();
-    }
+    updateVisuals() {
+        if (this.isOpen) {
+            this.sprite.setAlpha(0.3); // Visual fantasma/aberto
+            this.sprite.angle = -90;   // Rotação visual
+        } else {
+            this.sprite.setAlpha(1);
+            this.sprite.angle = 0;
+        }
     }
 
+    update() {
+        // Lógica para fechar sozinha ou insanidade pode ir aqui
+    }
 }

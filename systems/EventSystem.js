@@ -9,6 +9,25 @@ export default class EventSystem {
         this.cooldown = 0;
     }
 
+    // Factory method para Papel Interagível
+    createPaper(x, y) {
+        const paper = this.scene.add.rectangle(x, y, 20, 20, 0xffffff);
+        this.scene.physics.add.existing(paper);
+        
+        // Retorna objeto compatível com InteractionSystem
+        return {
+            sprite: paper,
+            body: paper.body,
+            x: x,
+            y: y,
+            onInteract: () => {
+                console.log("📄 Papel lido: 'Eles estão observando...'");
+                this.scene.sound.play('note');
+                paper.destroy(); // Destrói visual
+            }
+        };
+    }
+
     update(delta) {
 
         if (this.cooldown > 0) {
@@ -80,9 +99,9 @@ export default class EventSystem {
     }
     doorEvent() {
 
-    if (this.scene.door && this.scene.door.state === 'open') {
+    if (this.scene.door && this.scene.door.isOpen) {
         console.log("🗝️ Porta bate sozinha!");
-        this.scene.door.slam();
+        this.scene.door.close();
     }
     }
 
